@@ -19,12 +19,15 @@ function doPost(e) {
     const b = JSON.parse(e.postData.contents);
     if (b.k !== SECRET) return out({ error: 'wrong passphrase' });
     
-    // Save raw JSON to Data!A1
-    sh('Data').getRange('A1').setValue(JSON.stringify(b.state));
+    const state = b.state || { loans: [], extra: 5000, strat: 'rate' };
+    state.updatedAt = (b.state && b.state.updatedAt) ? b.state.updatedAt : Date.now();
+
+    // Save state to Data!A1
+    sh('Data').getRange('A1').setValue(JSON.stringify(state));
     
-    // Update visible tables in Loans and Payments sheets
-    render(b.state);
-    return out({ ok: true });
+    // Update visible tables in Loans and Payments sheets (clears tables if loans are empty)
+    render(state);
+    return out({ ok: true, count: (state.loans || []).length });
   } catch(err) {
     return out({ error: err.toString() });
   }
@@ -49,13 +52,28 @@ function scanSheets() {
     if (l && l.name) existingMap[String(l.name).toLowerCase().trim()] = l;
   });
 
-  // 2. Scan Loans sheet (fallback to Sheet1 if Loans is empty)
+  // 2. Scan Loans sheet (fallback to Sheet1 if Loans doesn't exist)
   let targetSheet = ss.getSheetByName('Loans');
-  if (!targetSheet || targetSheet.getLastRow() < 2) {
-    targetSheet = ss.getSheetByName('Sheet1');
-  }
+  if (!targetSheet) targetSheet = ss.getSheetByName('Sheet1');
 
-  if (targetSheet && targetSheet.getLastRow() >= 2) {
+  if (targetSheet) {
+    const lastRow = targetSheet.getLastRow();
+    
+    // IF USER DELETED ALL DATA ROWS (Only header row 1 or empty sheet remains)
+    if (lastRow <= 1) {
+      state.loans = [];
+      state.updatedAt = Date.now();
+      sh('Data').getRange('A1').setValue(JSON.stringify(state));
+      // Also clear Payments sheet
+      const pSheet = ss.getSheetByName('Payments');
+      if (pSheet) {
+        pSheet.clearContents();
+        pSheet.getRange(1, 1, 1, 5).setValues([['Loan', 'Type', 'Amount', 'Date', 'Month']]).setFontWeight('bold');
+        pSheet.setFrozenRows(1);
+      }
+      return state;
+    }
+
     const data = targetSheet.getDataRange().getValues();
     if (data.length >= 2) {
       const headers = data[0].map(h => String(h).toLowerCase().trim());
@@ -101,15 +119,15 @@ function scanSheets() {
         });
       }
 
-      if (scannedLoans.length > 0) {
-        state.loans = scannedLoans;
-      }
+      state.loans = scannedLoans;
+      state.updatedAt = Date.now();
+      sh('Data').getRange('A1').setValue(JSON.stringify(state));
     }
   }
 
-  // 3. Scan Payments sheet if present
+  // 3. Scan Payments sheet if present and loans exist
   const paySheet = ss.getSheetByName('Payments');
-  if (paySheet && paySheet.getLastRow() >= 2) {
+  if (paySheet && paySheet.getLastRow() >= 2 && state.loans.length > 0) {
     const payData = paySheet.getDataRange().getValues();
     if (payData.length >= 2) {
       const pHeaders = payData[0].map(h => String(h).toLowerCase().trim());
@@ -168,13 +186,14 @@ function table(name, rows) {
 }
 
 function render(S) {
-  if (!S) return;
-  const loans = S.loans || [];
-  table('Loans', [['Loan', 'Rate %', 'EMI', 'Pending', 'Original', 'Due day']]
-    .concat(loans.map(l => [l.name, l.rate, l.emi, l.bal, l.orig, l.day])));
-  const pay = [['Loan', 'Type', 'Amount', 'Date', 'Month']];
-  loans.forEach(l => (l.hist || []).forEach(h => pay.push([l.name, h.t === 'emi' ? 'EMI' : 'Prepayment', h.a, h.d, h.m])));
-  table('Payments', pay);
+  const loans = (S && S.loans) ? S.loans : [];
+  const loanRows = [['Loan', 'Rate %', 'EMI', 'Pending', 'Original', 'Due day']]
+    .concat(loans.map(l => [l.name, l.rate, l.emi, l.bal, l.orig, l.day]));
+  table('Loans', loanRows);
+
+  const payRows = [['Loan', 'Type', 'Amount', 'Date', 'Month']];
+  loans.forEach(l => (l.hist || []).forEach(h => payRows.push([l.name, h.t === 'emi' ? 'EMI' : 'Prepayment', h.a, h.d, h.m])));
+  table('Payments', payRows);
 }
 
 function out(o) {
