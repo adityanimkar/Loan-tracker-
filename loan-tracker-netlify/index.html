@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Loan Tracker</title><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%234A3CF0%27/%3E%3Cpath d=%27M8 22l5-6 4 3 7-9%27 stroke=%27white%27 stroke-width=%273%27 fill=%27none%27 stroke-linecap=%27round%27/%3E%3C/svg%3E"><meta name="color-scheme" content="dark">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0A0A1A;--sf:#13132B;--ink:#fff;--mut:#9C9CC0;--ln:#24244A;--ac:#36E2B4;--onac:#0A0A1A;--acs:#1C1C45;--hero:linear-gradient(160deg,#9B86F5 0%,#4A3CF0 60%,#2A22C8 100%);--warn:#CFC3FF;--warns:#2A2260;--gr:#6C6C99;--bad:#FF9C9C}
+*{box-sizing:border-box}body{background:radial-gradient(120% 50% at 85% 0%,#2B2175 0%,#0A0A1A 60%) fixed,#0A0A1A}html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Sora,system-ui,sans-serif}
+body{padding-top:env(safe-area-inset-top,0px)}
+#app{max-width:480px;margin:0 auto;padding:24px 20px calc(96px + env(safe-area-inset-bottom,0px))}
+button,input{font:inherit;color:inherit}button{cursor:pointer}
+h1{font-size:28px;margin:0}.m{font-size:13px;color:var(--mut)}.h{font-size:17px;font-weight:700;margin:24px 0 4px}
+.c{background:var(--sf);border:1px solid var(--ln);border-radius:20px;padding:16px;margin-top:12px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.t{height:8px;border-radius:4px;background:var(--ln);margin-top:12px;overflow:hidden}.t i{display:block;height:100%;background:var(--ac);transition:width .5s}
+.hero{background:var(--hero);color:#fff;border-radius:20px;padding:24px;margin-top:16px}
+.pill{font-size:12px;font-weight:700;background:var(--warns);color:var(--warn);border-radius:10px;padding:4px 10px;white-space:nowrap}
+.btn{height:44px;padding:0 20px;border:0;border-radius:22px;background:linear-gradient(90deg,#3D3DFF,#8E7BFF);color:#fff;font-weight:700;font-size:14px}
+.ghost{height:44px;padding:0 18px;border:1px solid var(--ln);border-radius:22px;background:transparent;font-weight:700;font-size:14px}
+.chip{height:40px;padding:0 16px;border-radius:20px;border:1px solid var(--ln);background:transparent;font-weight:700;font-size:14px}
+.on{background:var(--ac);color:var(--onac);border-color:var(--ac)}
+.tile{flex:1;background:var(--sf);border:1px solid var(--ln);border-radius:14px;padding:14px}.tile b{font-size:22px;display:block}
+.ln{display:flex;width:100%;align-items:center;gap:12px;padding:12px 0;border:0;border-bottom:1px solid var(--ln);background:transparent;text-align:left}
+.dot{width:28px;height:28px;border-radius:14px;border:2px solid var(--ac);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:none}
+.dot.d{background:var(--ac);color:var(--onac)}
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--sf);border-top:1px solid var(--ln);display:flex;padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{flex:1;height:64px;border:0;background:transparent;font-weight:700;font-size:13px;color:var(--mut)}nav .on{color:var(--ac);background:transparent}
+label{display:block;font-size:13px;color:var(--mut);margin-top:12px}
+input[type=text],input[type=number]{width:100%;height:46px;border:1px solid var(--ln);border-radius:12px;padding:0 12px;background:var(--bg);margin-top:4px}
+input[type=range]{width:100%;height:44px;accent-color:var(--ac)}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center;z-index:5}
+#modal.s{display:flex}#sheet{background:var(--sf);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px));max-height:90vh;overflow:auto}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(80px + env(safe-area-inset-bottom,0px));background:var(--hero);color:#fff;padding:10px 16px;border-radius:20px;font-size:14px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:6}
+#toast.s{opacity:1}.err{color:var(--bad);font-size:13px;margin-top:8px}
+</style></head><body>
+<div id="app"></div>
+<nav><button data-act="tab" data-t="home">Overview</button><button data-act="tab" data-t="loans">Loans</button><button data-act="tab" data-t="guide">Guide</button><button data-act="tab" data-t="settings">Settings</button></nav>
+<div id="modal"><div id="sheet"></div></div><div id="toast" role="status"></div>
+<script>
+const LS='loantracker.v1';let S={loans:[],extra:5000,strat:'rate'},tab='home',open=null,sort='rate',db=null,uid=null,st;
+try{S={...S,...JSON.parse(localStorage.getItem(LS)||'{}')}}catch(e){}
+const $=s=>document.querySelector(s),now=new Date(),cur=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=n=>'₹'+Math.round(n).toLocaleString('en-IN'),num=v=>Number(String(v).replace(/,/g,''));
+const dt=m=>new Date(now.getFullYear(),now.getMonth()+m,1).toLocaleString('en-US',{month:'short',year:'numeric'});
+const mon=now.toLocaleString('en-US',{month:'short'});
+function save(){try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}clearTimeout(st);st=setTimeout(push,1500)}
+const SK='loantracker.sync';let Y={},ss='';try{Y=JSON.parse(localStorage.getItem(SK)||'{}')}catch(e){}
+const stat=()=>{const e=$('#ss');if(e)e.textContent=ss};
+async function push(){if(!Y.u)return;if(!Y.u.includes('/exec')){ss='Error: Link must end with /exec (from Deploy > Web app)';stat();return}try{ss='Syncing…';stat();const r=await fetch(Y.u,{method:'POST',body:JSON.stringify({k:Y.k||'',state:S})}),t=await r.text();let j;try{j=JSON.parse(t)}catch(_){throw new Error(t.slice(0,60)||'Invalid response')}ss=j.ok?'Synced at '+new Date().toLocaleTimeString():'Sheet said: '+(j.error||'error')}catch(e){ss='Could not reach the sheet: '+(e.message==='Failed to fetch'?'Check permissions ("Who has access: Anyone")':e.message)}stat()}
+async function pull(){if(!Y.u)return;if(!Y.u.includes('/exec')){ss='Error: Link must end with /exec (from Deploy > Web app)';stat();return}try{ss='Loading…';stat();const r=await fetch(Y.u+'?k='+encodeURIComponent(Y.k||'')),t=await r.text();let j;try{j=JSON.parse(t)}catch(_){throw new Error(t.slice(0,60)||'Invalid response')}if(j.state){S={...S,...JSON.parse(j.state)};try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}render();ss='Loaded from sheet'}else ss=j.error?'Sheet said: '+j.error:'Sheet is empty'}catch(e){ss='Could not reach the sheet: '+(e.message==='Failed to fetch'?'Check permissions ("Who has access: Anyone")':e.message)}stat()}
+function toast(t){const e=$('#toast');e.textContent=t;e.className='s';setTimeout(()=>e.className='',1800)}
+const paid=l=>l.hist.some(h=>h.t==='emi'&&h.m===cur),active=()=>S.loans.filter(l=>l.bal>0);
+function sim(extra,strat){const L=active().map(l=>({...l,b:l.bal,i:0,end:0})),ord=[...L].sort(strat==='rate'?(a,b)=>b.rate-a.rate:(a,b)=>a.bal-b.bal);let m=0;
+while(L.some(l=>l.b>0.5)&&m<600){m++;let pool=extra;
+for(const l of L){if(l.b<=0.5){pool+=l.emi;continue}const it=l.b*l.rate/1200;l.i+=it;const due=l.b+it,p=Math.min(l.emi,due);l.b=due-p;pool+=l.emi-p;if(l.b<=0.5){l.b=0;l.end=m}}
+for(const l of ord){if(pool<=0)break;if(l.b>0){const p=Math.min(pool,l.b);l.b-=p;pool-=p;if(l.b<=0.5){l.b=0;l.end=m}}}}
+L.forEach(l=>{if(!l.end)l.end=600});return{L,ord,months:m,int:L.reduce((x,l)=>x+l.i,0)}}
+const left=l=>l.end>=600?'50+ years':l.end+' mo',dtl=l=>l.end>=600?'EMI too low to clear':dt(l.end);
+function due(l){if(l.bal<=0)return'Closed';if(paid(l))return'Paid for '+mon;const d=now.getDate();return l.day<d?'Overdue since '+l.day+' '+mon:l.day===d?'Due today':'Due '+l.day+' '+mon}
+const bar=p=>`<div class="t"><i style="width:${p}%"></i></div>`,pct=l=>Math.max(0,Math.min(100,Math.round((1-l.bal/Math.max(l.orig,l.bal,1))*100)));
+function empty(){return`<div class="c" style="text-align:center;padding:28px"><div class="h" style="margin-top:0">No loans yet</div><div class="m" style="margin:6px 0 16px">Add your loans to track EMIs, balances and see which one to close first.</div><button class="btn" data-act="add">Add a loan</button> <button class="ghost" data-act="sample">Try sample data</button></div>`}
+function home(){const A=active(),b=sim(0,'rate'),tp=A.reduce((x,l)=>x+l.bal,0),to=S.loans.reduce((x,l)=>x+Math.max(l.orig,l.bal),0),rp=Math.max(0,to-tp),p=to?Math.round(rp/to*100):0,te=A.reduce((x,l)=>x+l.emi,0),pa=A.filter(paid).reduce((x,l)=>x+l.emi,0);
+let h=`<div class="m">${now.toLocaleString('en-US',{month:'long',year:'numeric'})}</div><h1>Your loans</h1>`;if(!S.loans.length)return h+empty();
+h+=`<div class="hero row"><div><div style="font-size:13px;opacity:.8">Total pending</div><div style="font-size:32px;font-weight:700;letter-spacing:-1px">${fmt(tp)}</div><div style="font-size:13px;opacity:.8;margin-top:6px">${fmt(rp)} repaid of ${fmt(to)}</div></div><svg width="88" height="88" viewBox="0 0 88 88" aria-hidden="true"><circle cx="44" cy="44" r="36" fill="none" stroke="#2F4A40" stroke-width="10"/><circle cx="44" cy="44" r="36" fill="none" stroke="#7FD1AE" stroke-width="10" stroke-linecap="round" stroke-dasharray="${p*2.262} 226" transform="rotate(-90 44 44)"/><text x="44" y="49" text-anchor="middle" fill="#fff" font-size="16" font-weight="700">${p}%</text></svg></div>
+<div class="row" style="margin-top:12px;align-items:stretch"><div class="tile"><b>${A.length}</b><span class="m">Active loans</span></div><div class="tile"><b>${A.length}</b><span class="m">EMIs a month</span></div><div class="tile" style="flex:1.3"><b>${fmt(te)}</b><span class="m">Monthly EMI total</span></div></div>`;
+h+=`<div class="c"><div class="row"><div class="h" style="margin:0">${mon} EMIs</div><div class="m">${fmt(pa)} of ${fmt(te)}</div></div>${bar(te?pa/te*100:0)}`;
+[...A].sort((a,b)=>a.day-b.day).forEach(l=>h+=`<button class="ln" data-act="toggle" data-id="${l.id}"><span class="dot ${paid(l)?'d':''}">${paid(l)?'✓':''}</span><span style="flex:1"><b style="font-weight:500;display:block">${esc(l.name)}</b><span class="m">${due(l)}</span></span><b>${fmt(l.emi)}</b></button>`);
+h+=A.length&&pa===te?`<div style="margin-top:12px;font-weight:700;color:var(--ac)">All clear for this month. Nicely done.</div>`:`<div class="m" style="margin-top:10px">Tap an EMI when you pay it. The balance updates automatically.</div>`;h+='</div>';
+if(A.length){h+=`<div class="h">Closing soon</div>`;[...b.L].sort((a,c)=>a.end-c.end).slice(0,2).forEach(l=>h+=`<div class="c"><div class="row"><b>${esc(l.name)}</b><span class="m">${left(l)} · ${dtl(l)}</span></div><div class="m">${fmt(l.bal)} pending</div>${bar(pct(l))}</div>`);
+h+=`<div class="c" style="background:var(--acs);border-color:var(--ac)"><b>Got extra money this month?</b><div class="m" style="margin:4px 0 12px">See which loan to close first and how much interest you save.</div><button class="btn" data-act="tab" data-t="guide">Open prepay guide</button></div>`}return h}
+function loans(){let h=`<div class="row"><h1>My loans</h1><button class="btn" data-act="add">+ Add</button></div>`;if(!S.loans.length)return h+empty();
+const b=sim(0,'rate'),E=id=>b.L.find(x=>x.id===id)||{end:0,i:0};
+h+=`<div class="row" style="justify-content:flex-start;margin-top:14px"><button class="chip ${sort==='rate'?'on':''}" data-act="sort" data-s="rate">Highest rate</button><button class="chip ${sort==='soon'?'on':''}" data-act="sort" data-s="soon">Closing soon</button></div>`;
+[...S.loans].sort(sort==='rate'?(a,c)=>c.rate-a.rate:(a,c)=>(E(a.id).end||999)-(E(c.id).end||999)).forEach(l=>{const e=E(l.id),o=open===l.id;
+h+=`<div class="c" style="padding:0"><button class="ln" style="display:block;padding:16px;border:0" data-act="open" data-id="${l.id}"><div class="row"><b style="font-size:16px">${esc(l.name)}</b><span class="pill">${l.rate}% p.a.</span></div><div class="row" style="margin-top:10px;align-items:flex-end"><div><div class="m">Pending</div><b style="font-size:22px">${fmt(l.bal)}</b></div><div style="text-align:right"><div class="m">EMI</div><b>${fmt(l.emi)}/mo</b></div></div>${bar(pct(l))}<div class="row m" style="margin-top:8px"><span>${pct(l)}% repaid</span><span>${l.bal<=0?'Closed':left(e)+' · '+dtl(e)}</span></div></button>`;
+if(o){h+=`<div style="border-top:1px solid var(--ln);padding:16px"><div class="row"><span class="m">Next EMI</span><b>${due(l)}</b></div><div class="row" style="margin-top:8px"><span class="m">Interest still to pay</span><b>${fmt(e.i)}</b></div><div class="row" style="margin-top:8px"><span class="m">Total to clear it</span><b>${fmt(l.bal+e.i)}</b></div>`;
+if(l.hist.length)h+=`<div class="m" style="margin-top:12px">Recent payments</div>`+l.hist.slice(-4).reverse().map(x=>`<div class="row" style="font-size:14px;margin-top:4px"><span>${x.t==='emi'?'EMI':'Prepayment'} · ${x.d}</span><b>${fmt(x.a)}</b></div>`).join('');
+h+=`<div class="row" style="flex-wrap:wrap;justify-content:flex-start;margin-top:14px"><button class="btn" data-act="toggle" data-id="${l.id}">${paid(l)?'Undo EMI':'Mark EMI paid'}</button><button class="ghost" data-act="pre" data-id="${l.id}">Prepay</button><button class="ghost" data-act="edit" data-id="${l.id}">Edit</button><button class="ghost" data-act="del" data-id="${l.id}">Delete</button></div></div>`}h+='</div>'});
+return h}
+function settings(){return `<h1>Settings</h1><div class="m" style="margin-top:4px">Cloud sync & application data</div><div class="c" style="margin-top:16px"><div class="row"><b>Google Sheet sync</b><span class="pill" style="${ss.startsWith('Synced')?'background:var(--acs);color:var(--ac)':''}">${ss.startsWith('Synced')?'Connected':'Cloud Sync'}</span></div><div class="m" style="margin:6px 0 0">Paste the web app link from your Apps Script. Changes then save to your sheet automatically.</div>${F('y_u','Web app link',Y.u||'','text','placeholder="https://script.google.com/macros/s/…/exec"')}${F('y_k','Passphrase (same as in the script)',Y.k||'','text')}<div class="row" style="margin-top:14px;justify-content:flex-start"><button class="btn" data-act="syncsave">Save and sync</button><button class="ghost" data-act="pull">Load from sheet</button></div><div id="ss" class="m" style="margin-top:8px" role="status">${esc(ss)}</div></div><div class="c" style="margin-top:16px"><b>Data management</b><div class="m" style="margin:6px 0 14px">Erase all stored loans and transaction history from this device.</div><button class="ghost" style="color:var(--bad);border-color:var(--bad)" data-act="reset">Reset all</button></div><div class="c" style="margin-top:16px"><b>About</b><div class="m" style="margin-top:4px">Loan Tracker v1.0 · Hosted on Cloudflare Pages</div></div>`}
+function guide(){let h=`<h1>Prepay guide</h1><div class="m" style="margin-top:4px">If I add extra money every month…</div>`;if(!active().length)return h+empty();
+return h+`<div class="c"><div class="row"><span class="m">Extra per month</span><b id="xl" style="font-size:26px;color:var(--ac)">${fmt(S.extra)}</b></div><input id="ex" type="range" aria-label="Extra money per month" min="0" max="50000" step="500" value="${S.extra}"><div class="row m"><span>₹0</span><span>₹50,000</span></div><div class="row" style="margin-top:14px"><button class="chip ${S.strat==='rate'?'on':''}" style="flex:1" data-act="strat" data-s="rate">Highest rate first</button><button class="chip ${S.strat==='small'?'on':''}" style="flex:1" data-act="strat" data-s="small">Smallest loan first</button></div><div class="m" style="margin-top:10px">${S.strat==='rate'?'Highest rate first cuts the most interest.':'Smallest loan first closes loans sooner and frees up EMIs quickly.'}</div></div><div id="gres"></div>`}
+function gres(){const b=sim(0,'rate'),p=sim(S.extra,S.strat),el=$('#gres');if(!el)return;const B=id=>b.L.find(x=>x.id===id);
+let h=`<div class="hero"><div style="font-size:13px;opacity:.8">Debt-free by</div><div style="font-size:36px;font-weight:700;letter-spacing:-1px">${p.months>=600?'Never':dt(p.months)}</div><div style="font-size:13px;opacity:.8">${p.months} months instead of ${b.months}</div><div class="row" style="margin-top:16px;padding-top:16px;border-top:1px solid #2F4A40"><div><div style="font-size:12px;opacity:.8">Interest saved</div><b style="font-size:24px;color:#7FD1AE">${fmt(b.int-p.int)}</b></div><div style="text-align:right"><div style="font-size:12px;opacity:.8">Time saved</div><b style="font-size:24px">${b.months-p.months} mo</b></div></div></div><div class="h">Payoff race</div><div class="m">Grey is today’s plan. Green is with your extra money.</div>`;
+p.ord.forEach((o,i)=>{const x=B(o.id);h+=`<div class="c"><div class="row"><div class="row" style="justify-content:flex-start"><span class="dot d" style="width:26px;height:26px;border-radius:13px;font-size:13px">${i+1}</span><b>${esc(o.name)}</b></div><span class="m" style="color:var(--ac);font-weight:700">${i===0&&S.extra>0?'Target':''}</span></div><div style="height:10px;border-radius:5px;background:var(--ln);margin-top:12px"><div style="height:10px;border-radius:5px;background:var(--gr);width:${x.end/b.months*100}%"></div></div><div style="height:10px;border-radius:5px;background:var(--acs);margin-top:6px"><div style="height:10px;border-radius:5px;background:var(--ac);width:${o.end/b.months*100}%;transition:width .5s"></div></div><div class="row m" style="margin-top:8px"><span>${left(o)} (was ${left(x)}) · ${dtl(o)}</span><span>Saves ${fmt(x.i-o.i)}</span></div></div>`});
+if(S.extra>0)h+=`<button class="btn" style="width:100%;height:52px;margin-top:16px" data-act="apply">Record ${fmt(S.extra)} prepayment on ${esc(p.ord[0].name)}</button>`;
+el.innerHTML=h+`<div class="m" style="margin-top:14px;font-size:12px">Estimates based on your balances. Freed-up EMIs roll into the next loan. Assumes no prepayment charges.</div>`}
+function render(){$('#app').innerHTML=({home,loans,guide,settings})[tab]();document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));if(tab==='guide')gres()}
+function sheet(h){$('#sheet').innerHTML=h;$('#modal').classList.add('s')}function close(){$('#modal').classList.remove('s')}
+const F=(id,lb,v,ty='number',ex='')=>`<label for="${id}">${lb}</label><input id="${id}" type="${ty}" ${ty==='number'?'inputmode="decimal" step="any" min="0"':''} value="${esc(v)}" ${ex}>`;
+function form(l){l=l||{};sheet(`<div class="h" style="margin-top:0">${l.id?'Edit loan':'Add a loan'}</div>${F('f_name','Loan name',l.name||'','text','placeholder="e.g. Home loan"')}${F('f_bal','Outstanding balance (₹)',l.bal??'')}${F('f_orig','Original loan amount (₹, optional)',l.orig??'')}${F('f_rate','Interest rate (% per year)',l.rate??'')}${F('f_emi','Monthly EMI (₹)',l.emi??'')}${F('f_day','EMI due day (1 to 28)',l.day??5)}<div id="fe" class="err" role="alert"></div><div class="row" style="margin-top:16px"><button class="ghost" data-act="close" style="flex:1">Cancel</button><button class="btn" style="flex:1" data-act="saveloan" data-id="${l.id||''}">Save</button></div>`)}
+function undo(l){const x=l.hist[l.hist.length-1];if(x){l.bal=x.pb;l.hist.pop()}}
+const A={tab:d=>{tab=d.t;scrollTo(0,0);render()},add:()=>form(),close,sort:d=>{sort=d.s;render()},open:d=>{open=open===d.id?null:d.id;render()},strat:d=>{S.strat=d.s;save();render()},
+sample:()=>{S.loans=[['Credit card EMI',16,7000,42000,60000,3],['Personal loan',14,11200,185000,300000,8],['Car loan',9.5,15800,312000,500000,10],['Home loan',8.5,24300,1842500,3000000,5]].map((x,i)=>({id:'s'+i,name:x[0],rate:x[1],emi:x[2],bal:x[3],orig:x[4],day:x[5],hist:[]}));save();render()},
+edit:d=>form(S.loans.find(l=>l.id===d.id)),
+saveloan:d=>{const v=id=>$('#'+id).value,n=v('f_name').trim(),bal=num(v('f_bal')),rate=num(v('f_rate')),emi=num(v('f_emi')),day=Math.round(num(v('f_day'))),orig=num(v('f_orig'))||bal;
+if(!n||!(bal>0)||isNaN(rate)||!(emi>0)||!(day>=1&&day<=28)){$('#fe').textContent='Please enter a name, a balance, a rate, an EMI and a due day between 1 and 28.';return}
+if(d.id){Object.assign(S.loans.find(l=>l.id===d.id),{name:n,bal,orig,rate,emi,day})}else S.loans.push({id:'l'+Date.now(),name:n,bal,orig,rate,emi,day,hist:[]});save();close();render();toast('Loan saved')},
+toggle:d=>{const l=S.loans.find(x=>x.id===d.id);if(paid(l)){const x=l.hist[l.hist.length-1];if(x&&x.t==='emi'&&x.m===cur){undo(l);toast('EMI payment undone')}}else{const it=l.bal*l.rate/1200,pb=l.bal;l.bal=Math.max(0,l.bal-(l.emi-it));l.hist.push({t:'emi',a:Math.min(l.emi,pb+it),m:cur,d:now.getDate()+' '+mon,pb});toast(l.bal<=0?l.name+' is fully paid off':'EMI recorded')}save();render()},
+pre:d=>{const l=S.loans.find(x=>x.id===d.id);sheet(`<div class="h" style="margin-top:0">Prepay ${esc(l.name)}</div><div class="m">Pending ${fmt(l.bal)}</div>${F('p_amt','Prepayment amount (₹)','')}<div id="fe" class="err" role="alert"></div><div class="row" style="margin-top:16px"><button class="ghost" data-act="close" style="flex:1">Cancel</button><button class="btn" style="flex:1" data-act="savepre" data-id="${l.id}">Record</button></div>`)},
+savepre:d=>{const a=num($('#p_amt').value);if(!(a>0)){$('#fe').textContent='Enter an amount above zero.';return}prepay(d.id,a);close();render()},
+apply:()=>{prepay(sim(S.extra,S.strat).ord[0].id,S.extra);render()},
+del:d=>sheet(`<div class="h" style="margin-top:0">Delete this loan?</div><div class="m">This removes the loan and its payment history.</div><div class="row" style="margin-top:16px"><button class="ghost" data-act="close" style="flex:1">Cancel</button><button class="btn" style="flex:1" data-act="del2" data-id="${d.id}">Delete</button></div>`),
+del2:d=>{S.loans=S.loans.filter(l=>l.id!==d.id);open=null;save();close();render()},
+reset:()=>sheet(`<div class="h" style="margin-top:0">Reset everything?</div><div class="m">All loans and payments will be removed.</div><div class="row" style="margin-top:16px"><button class="ghost" data-act="close" style="flex:1">Cancel</button><button class="btn" style="flex:1" data-act="reset2">Reset</button></div>`),
+reset2:()=>{S={loans:[],extra:5000,strat:'rate'};save();close();render()},
+syncsave:()=>{Y={u:$('#y_u').value.trim(),k:$('#y_k').value.trim()};try{localStorage.setItem(SK,JSON.stringify(Y))}catch(e){}push()},pull};
+function prepay(id,a){const l=S.loans.find(x=>x.id===id),pb=l.bal,x=Math.min(a,pb);l.bal=pb-x;l.hist.push({t:'pre',a:x,m:cur,d:now.getDate()+' '+mon,pb});save();toast(fmt(x)+' prepayment recorded')}
+document.addEventListener('click',e=>{const t=e.target.closest('[data-act]');if(t&&A[t.dataset.act])A[t.dataset.act](t.dataset)});
+document.addEventListener('input',e=>{if(e.target.id==='ex'){S.extra=Number(e.target.value);$('#xl').textContent=fmt(S.extra);gres();save()}});
+$('#modal').addEventListener('click',e=>{if(e.target.id==='modal')close()});
+render();
+if(Y.u&&!S.loans.length)pull();
+</script></body></html>
